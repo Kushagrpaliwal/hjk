@@ -81,7 +81,6 @@ export default function Page() {
   };
   const fetchmatchlist = async () => {
     try {
-      setDataLoading(true);
       const res = await fetch(
         "/api/sports/matchlist"
       );
@@ -89,7 +88,6 @@ export default function Page() {
       setMatchdata(data.data?.t1 || []);
     } catch (err) {
       console.error("Failed to fetch matches", err);
-      setMatchdata([]);
     } finally {
       setDataLoading(false);
     }
@@ -110,7 +108,7 @@ export default function Page() {
 
   useEffect(() => {
     fetchmatchlist();
-    const interval = setInterval(fetchmatchlist, 10000);
+    const interval = setInterval(fetchmatchlist, 600000); // 10 minutes
     return () => clearInterval(interval);
   }, []);
 
@@ -256,29 +254,39 @@ export default function Page() {
                       </div>
 
                       <div className="flex items-center gap-1.5 md:gap-2">
-                        {[0, 1, 2].map((idx) => (
-                          <div
-                            key={`pair-${item.gmid}-${idx}`}
-                            className="flex gap-1.5 md:gap-2"
-                          >
-                            <div className="w-[48px] md:w-[56px] rounded-md bg-[#a9d8ff] px-1.5 md:px-2 py-1 text-center">
-                              <div className="text-[12px] md:text-[13px] font-bold text-slate-900">
-                                {market.back[idx]}
-                              </div>
-                              <div className="text-[8px] md:text-[9px] text-slate-600">
-                                -
-                              </div>
+                        {[0, 1, 2].map((idx) => {
+                          const backOdd = market.back[idx];
+                          const layOdd = market.lay[idx];
+                          if (backOdd === "-" && layOdd === "-") return null;
+
+                          return (
+                            <div
+                              key={`pair-${item.gmid}-${idx}`}
+                              className="flex gap-1.5 md:gap-2"
+                            >
+                              {backOdd !== "-" && (
+                                <div className="w-[48px] md:w-[56px] rounded-md bg-[#a9d8ff] px-1.5 md:px-2 py-1 text-center">
+                                  <div className="text-[12px] md:text-[13px] font-bold text-slate-900">
+                                    {backOdd}
+                                  </div>
+                                  <div className="text-[8px] md:text-[9px] text-slate-600">
+                                    -
+                                  </div>
+                                </div>
+                              )}
+                              {layOdd !== "-" && (
+                                <div className="w-[48px] md:w-[56px] rounded-md bg-[#f7c9c9] px-1.5 md:px-2 py-1 text-center">
+                                  <div className="text-[12px] md:text-[13px] font-bold text-slate-900">
+                                    {layOdd}
+                                  </div>
+                                  <div className="text-[8px] md:text-[9px] text-slate-600">
+                                    -
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                            <div className="w-[48px] md:w-[56px] rounded-md bg-[#f7c9c9] px-1.5 md:px-2 py-1 text-center">
-                              <div className="text-[12px] md:text-[13px] font-bold text-slate-900">
-                                {market.lay[idx]}
-                              </div>
-                              <div className="text-[8px] md:text-[9px] text-slate-600">
-                                -
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   </div>

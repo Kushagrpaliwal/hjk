@@ -12,7 +12,7 @@ export async function GET(req) {
   }
 
   try {
-    const url = `https://score.akamaized.uk/diamond-live-score?gmid=${encodeURIComponent(
+    const url = `https://score.akamaized.uk/live-src?id=${encodeURIComponent(
       gmid
     )}`;
     const res = await fetch(url, { cache: "no-store" });
@@ -20,11 +20,7 @@ export async function GET(req) {
       return NextResponse.json({ ok: false }, { status: 200 });
     }
 
-    const html = await res.text();
-    const hasErrorTitle =
-      html.includes("<title>Error</title>") || html.includes(">Error<");
-
-    return NextResponse.json({ ok: !hasErrorTitle }, { status: 200 });
+    return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err) {
     return NextResponse.json({ ok: false }, { status: 200 });
   }

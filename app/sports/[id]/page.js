@@ -978,7 +978,7 @@ export default function CricketBettingPage({ params }) {
                     <div className="rounded-xl overflow-hidden border border-slate-100 bg-white shadow-sm">
                       <iframe
                         title="Live Score"
-                        src={`https://score.akamaized.uk/diamond-live-score?gmid=${id}`}
+                        src={`https://score.akamaized.uk/diamond-live-score?id=${id}`}
                         className="w-full h-[220px] bg-white"
                       />
                     </div>
@@ -1013,35 +1013,37 @@ export default function CricketBettingPage({ params }) {
                 </div>
 
                 {/* Match Odds */}
-                <TableCard
-                  title="Match Odds"
-                  backLabel="Back"
-                  layLabel="Lay"
-                >
-                  {moTeams.team1 && moTeams.team2
-                    ? renderMarketRows(moTeams, matchodds, "MatchOdds")
-                    : <NoData />}
-                </TableCard>
+                {moTeams.team1 && moTeams.team2 && (
+                  <TableCard
+                    title="Match Odds"
+                    backLabel="Back"
+                    layLabel="Lay"
+                  >
+                    {renderMarketRows(moTeams, matchodds, "MatchOdds")}
+                  </TableCard>
+                )}
 
                 {/* Bookmaker */}
-                <TableCard
-                  title="Bookmaker"
-                  backLabel="Back"
-                  layLabel="Lay"
-                >
-                  {bmTeams.team1 && bmTeams.team2
-                    ? renderMarketRows(bmTeams, bookmaker, "Bookmaker")
-                    : <NoData />}
-                </TableCard>
+                {bmTeams.team1 && bmTeams.team2 && (
+                  <TableCard
+                    title="Bookmaker"
+                    backLabel="Back"
+                    layLabel="Lay"
+                  >
+                    {renderMarketRows(bmTeams, bookmaker, "Bookmaker")}
+                  </TableCard>
+                )}
 
                 {/* Fancy */}
-                <TableCard
-                  title="Fancy"
-                  backLabel="No"
-                  layLabel="Yes"
-                >
-                  {renderFancyRows()}
-                </TableCard>
+                {fancy?.section?.length > 0 && (
+                  <TableCard
+                    title="Fancy"
+                    backLabel="No"
+                    layLabel="Yes"
+                  >
+                    {renderFancyRows()}
+                  </TableCard>
+                )}
               </>
             )}
           </div>
