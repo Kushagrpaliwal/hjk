@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import Script from "next/script";
 import { useSearchParams } from "next/navigation";
 import { Upload, Copy, CheckCircle2, AlertTriangle } from "lucide-react";
 import BottomNav from "../../components/BottomNav";
 
-export default function DepositPage() {
+function DepositContent() {
   const [method, setMethod] = useState("manual");
   const [amount, setAmount] = useState("");
   const [transactionId, setTransactionId] = useState("");
@@ -395,5 +395,13 @@ export default function DepositPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function DepositPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-500">Loading...</div>}>
+      <DepositContent />
+    </Suspense>
   );
 }
