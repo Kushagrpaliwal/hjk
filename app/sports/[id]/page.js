@@ -376,7 +376,7 @@ export default function CricketBettingPage({ params }) {
 
   useEffect(() => {
     fetchMatchDetails();
-    const interval = setInterval(fetchMatchDetails, 5000);
+    const interval = setInterval(fetchMatchDetails, 20000);
 
     /*
     // Logic to fire the API per second (commented out for now)

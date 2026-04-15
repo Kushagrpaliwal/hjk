@@ -148,6 +148,17 @@ export default function Page() {
     return odd?.odds ?? "-";
   };
 
+  const isMatchLive = (item) => {
+    // If iplay flag explicitly says live, trust it
+    if (isLiveFlag(item?.iplay)) return true;
+    // Otherwise, compare stime with current time
+    if (item?.stime) {
+      const matchTime = new Date(item.stime);
+      if (!isNaN(matchTime) && new Date() >= matchTime) return true;
+    }
+    return false;
+  };
+
   const buildMarketRow = (item) => {
     const tags = [];
     if (item?.bm) tags.push("BM");
@@ -162,7 +173,7 @@ export default function Page() {
       date: item?.stime || "-",
       match: item?.ename || "Match",
       tags,
-      isLive: isLiveFlag(item?.iplay),
+      isLive: isMatchLive(item),
       back: [getOddValue(team1, "back"), "-", "-"],
       lay: [getOddValue(team2, "lay"), "-", "-"],
     };
@@ -201,7 +212,7 @@ export default function Page() {
             <div className="flex gap-3">
                 <div className="flex items-center gap-1.5 bg-white/15 px-3 py-1.5 rounded-full text-sm">
                   <span className="w-2 h-2 rounded-full bg-green-400" />
-                  {matchdata.filter((m) => isLiveFlag(m?.iplay)).length} Live
+                  {matchdata.filter((m) => isMatchLive(m)).length} Live
                 </div>
             </div>
           </div>
