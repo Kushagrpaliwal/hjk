@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import BottomNav from "../../components/BottomNav";
 import {
   User,
@@ -114,6 +115,8 @@ export default function ProfilePage() {
           </div>
 
           {/* COMPACT WALLET */}
+
+        <Link href="/deposit">
           <div className="bg-gradient-to-r from-emerald-500/10 to-transparent border border-emerald-500/20 rounded-2xl p-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-emerald-500/20 rounded-xl text-emerald-400">
@@ -124,7 +127,7 @@ export default function ProfilePage() {
                   Balance
                 </p>
                 <h3 className="text-xl font-black text-white leading-none">
-                  ${userData?.wallet || "0.00"}
+                  ₹{userData?.wallet || "0.00"}
                 </h3>
               </div>
             </div>
@@ -135,6 +138,7 @@ export default function ProfilePage() {
               <PlusCircle size={20} />
             </button>
           </div>
+        </Link>    
         </div>
 
         {/* GAME STATS SECTION */}

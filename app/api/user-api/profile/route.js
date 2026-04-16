@@ -29,19 +29,39 @@ export async function GET(req) {
     }
 
     const userId = decoded.userId;
+    const username = decoded.username; // ⚠️ required for new bets table
 
     // 3. Parallel Database Queries
-    // We fetch user info, recharges, withdrawals, and bets simultaneously
     const [
       [userRows],
       [recharges],
       [withdrawals],
-      [bets]
+      [userBets],
+      [newBets] // 👈 new table
     ] = await Promise.all([
-      pool.query("SELECT id, name, username, email, phone, wallet, status FROM users WHERE id = ?", [userId]),
-      pool.query("SELECT id, amount, status, transaction_id, created_by FROM recharges WHERE user_id = ? ORDER BY created_by DESC", [userId]),
-      pool.query("SELECT id, amount, status, bank_holder, created_by FROM withdrawals WHERE user_id = ? ORDER BY created_by DESC", [userId]),
-      pool.query("SELECT id, bet_amount, game_type, bet_on, status, result, created_by FROM user_bets WHERE user_id = ? ORDER BY created_by DESC", [userId])
+      pool.query(
+        "SELECT id, name, username, email, phone, wallet, status FROM users WHERE id = ?",
+        [userId]
+      ),
+      pool.query(
+        "SELECT id, amount, status, transaction_id, created_by FROM recharges WHERE user_id = ? ORDER BY created_by DESC",
+        [userId]
+      ),
+      pool.query(
+        "SELECT id, amount, status, bank_holder, created_by FROM withdrawals WHERE user_id = ? ORDER BY created_by DESC",
+        [userId]
+      ),
+      pool.query(
+        "SELECT id, bet_amount, game_type, bet_on, status, result, created_by FROM user_bets WHERE user_id = ? ORDER BY created_by DESC",
+        [userId]
+      ),
+      pool.query(
+        `SELECT id, eventName, sportName, gameType, betType, runnerName, odds, stake, status, createdAt 
+         FROM bets 
+         WHERE username = ? 
+         ORDER BY createdAt DESC`,
+        [username]
+      )
     ]);
 
     if (userRows.length === 0) {
@@ -57,9 +77,10 @@ export async function GET(req) {
         user: {
           ...user,
           history: {
-            recharges: recharges,
-            withdrawals: withdrawals,
-            bets: bets
+            recharges,
+            withdrawals,
+            bets: userBets,       // old bets
+            sportsbookBets: newBets // 👈 new bets table
           }
         }
       },

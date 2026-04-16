@@ -15,6 +15,8 @@ export async function GET() {
     }
 }
 
+
+
 export async function PATCH(request) {
     try {
         const { id, status } = await request.json();
@@ -28,20 +30,43 @@ export async function PATCH(request) {
             return NextResponse.json({ success: false, error: "Invalid status" }, { status: 400 });
         }
 
+        // Get withdrawal details first
+        const [withdrawal] = await pool.query(
+            "SELECT * FROM withdrawals WHERE id = ?",
+            [id]
+        );
+
+        if (withdrawal.length === 0) {
+            return NextResponse.json({ success: false, error: "Withdrawal not found" }, { status: 404 });
+        }
+
+        const w = withdrawal[0];
+
+        // Prevent re-processing
+        if (w.status !== 'pending') {
+            return NextResponse.json({ success: false, error: "Already processed" }, { status: 400 });
+        }
+
+        // Update status
         await pool.query(
             "UPDATE withdrawals SET status = ? WHERE id = ?",
             [status.toLowerCase(), id]
         );
 
-        // If approved, you can subtract from the user's wallet
         if (status.toLowerCase() === 'approved') {
+            // If you already deducted earlier → do nothing here
+        }
+
+        if (status.toLowerCase() === 'rejected') {
+            // Refund wallet
             await pool.query(
-                "UPDATE users u JOIN withdrawals w ON u.id = w.user_id SET u.wallet = u.wallet - w.amount WHERE w.id = ?",
-                [id]
+                "UPDATE users SET wallet = wallet + ? WHERE id = ?",
+                [w.amount, w.user_id]
             );
         }
 
         return NextResponse.json({ success: true, message: `Withdrawal ${status}` });
+
     } catch (error) {
         return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
