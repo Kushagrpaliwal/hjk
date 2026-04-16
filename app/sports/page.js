@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Loader from "../../components/Loader";
 import BottomNav from "../../components/BottomNav";
+import Link from "next/link";
 
 const LIVE_FLAG_TRUE = new Set([
   "1",
@@ -198,6 +199,7 @@ export default function Page() {
                 </div>
               </div>
 
+              <Link href="/deposit">
               <div className="flex items-center gap-3 bg-white/10 border border-white/20 px-4 py-2 rounded-full">
                 <span className="material-symbols-outlined text-[#39ff14] text-xl">
                   payments
@@ -207,6 +209,7 @@ export default function Page() {
                   <span className="text-blue-100 font-medium">₹</span>
                 </span>
               </div>
+             </Link> 
             </div>
 
             <div className="flex gap-3">

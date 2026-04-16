@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { User, History, RotateCcw, Zap, Plus, Minus } from "lucide-react";
+import Link from "next/link";
 
 export default function TwoDiceGamePage() {
   const [betAmount, setBetAmount] = useState(100);
@@ -225,6 +226,8 @@ export default function TwoDiceGamePage() {
             TWO DICE RUSH
           </h1>
         </div>
+
+        <Link href="/deposit">
         <div className="flex items-center gap-3 bg-[#141414] px-3 py-1.5 rounded-full border border-white/5">
           <span className="text-[#c0ff00] font-black text-sm md:text-base">
             {balance.toLocaleString()}
@@ -233,6 +236,7 @@ export default function TwoDiceGamePage() {
             <User size={14} className="text-gray-400" />
           </div>
         </div>
+        </Link>
       </header>
 
       <main className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6">

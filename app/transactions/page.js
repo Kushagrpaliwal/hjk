@@ -7,7 +7,7 @@ import {
   ArrowUp,
   Gamepad2,
   Search,
-  Loader2, // Added for loading state
+  Loader2,
 } from "lucide-react";
 
 export default function TransactionPage() {
@@ -20,14 +20,17 @@ export default function TransactionPage() {
     const fetchHistory = async () => {
       try {
         setLoading(true);
-        // Assuming your API route is /api/user/profile
-        const response = await fetch("/api/user-api/profile"); 
+        const response = await fetch("/api/user-api/profile");
         const data = await response.json();
 
         if (response.ok && data.user?.history) {
-          const { recharges, withdrawals, bets } = data.user.history;
+          const {
+            recharges = [],
+            withdrawals = [],
+            bets = [],
+            sportsbookBets = [],
+          } = data.user.history;
 
-          // Transform different table data into a unified transaction format
           const unifiedData = [
             ...recharges.map((item) => ({
               id: `rec-${item.id}`,
@@ -35,7 +38,7 @@ export default function TransactionPage() {
               amount: item.amount,
               date: new Date(item.created_by),
               description: `Recharge: ${item.transaction_id}`,
-              status: item.status,
+              status: item.status?.toLowerCase(),
             })),
             ...withdrawals.map((item) => ({
               id: `wit-${item.id}`,
@@ -43,7 +46,7 @@ export default function TransactionPage() {
               amount: item.amount,
               date: new Date(item.created_by),
               description: `Withdrawal to ${item.bank_holder}`,
-              status: item.status,
+              status: item.status?.toLowerCase(),
             })),
             ...bets.map((item) => ({
               id: `bet-${item.id}`,
@@ -51,11 +54,22 @@ export default function TransactionPage() {
               amount: item.bet_amount,
               date: new Date(item.created_by),
               description: `Bet on ${item.game_type} (${item.bet_on})`,
-              status: item.status,
+              status: item.status?.toLowerCase(),
+            })),
+            ...sportsbookBets.map((item) => ({
+              id: `sport-${item.id}`,
+              type: "sports",
+              amount: item.stake,
+              date: new Date(item.createdAt),
+              description: {
+                event: item.eventName,
+                runner: item.runnerName,
+                meta: `${item.betType} @ ${item.odds}`,
+              },
+              status: item.status?.toLowerCase(),
             })),
           ];
 
-          // Sort by date (newest first)
           unifiedData.sort((a, b) => b.date - a.date);
           setTransactions(unifiedData);
         }
@@ -71,20 +85,37 @@ export default function TransactionPage() {
 
   const filtered = transactions
     .filter((t) => filter === "all" || t.type === filter)
-    .filter((t) =>
-      t.description.toLowerCase().includes(search.toLowerCase()) ||
-      t.type.toLowerCase().includes(search.toLowerCase())
-    );
+    .filter((t) => {
+      const searchText = search.toLowerCase();
+
+      if (typeof t.description === "object") {
+        return (
+          t.description.event?.toLowerCase().includes(searchText) ||
+          t.description.runner?.toLowerCase().includes(searchText) ||
+          t.description.meta?.toLowerCase().includes(searchText)
+        );
+      }
+
+      return (
+        t.description?.toLowerCase().includes(searchText) ||
+        t.type.toLowerCase().includes(searchText)
+      );
+    });
 
   const formatDate = (d) => {
-    return d.toLocaleDateString(undefined, { 
-        year: "numeric", month: "short", day: "numeric", hour: '2-digit', minute: '2-digit' 
+    return d.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
   const iconFor = (type) => {
     if (type === "deposit") return <ArrowDown className="text-green-400" />;
     if (type === "withdrawal") return <ArrowUp className="text-red-400" />;
+    if (type === "sports") return <Gamepad2 className="text-purple-400" />;
     return <Gamepad2 className="text-cyan-400" />;
   };
 
@@ -94,8 +125,8 @@ export default function TransactionPage() {
         <div className="w-full max-w-md rounded-3xl p-4 relative">
 
           {/* HEADER */}
-          <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-gradient-to-r from-cyan-400 via-blue-500 to-indigo-600 px-8 py-2 rounded-full shadow-[0_0_20px_rgba(59,130,246,0.6)] border border-white/20 z-10">
-            <h1 className="text-white font-bold tracking-widest text-sm text-nowrap">
+          <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-gradient-to-r from-cyan-400 via-blue-500 to-indigo-600 px-6 py-2 rounded-full shadow-[0_0_20px_rgba(59,130,246,0.6)] border border-white/20 z-10">
+            <h1 className="text-white font-bold tracking-widest text-[12px]">
               TRANSACTION HISTORY
             </h1>
           </div>
@@ -112,18 +143,24 @@ export default function TransactionPage() {
               />
               <Search className="text-slate-400 w-4 h-4" />
             </div>
-            <div className="flex justify-around gap-1">
+
+            <div className="flex justify-around">
               {[
                 { key: "all", label: "All" },
                 { key: "deposit", label: "Deposits" },
                 { key: "withdrawal", label: "Withdraws" },
                 { key: "gameplay", label: "Bets" },
+                { key: "sports", label: "Sports" },
               ].map((f) => (
                 <button
                   key={f.key}
                   onClick={() => setFilter(f.key)}
-                  className={`px-3 py-1.5 rounded-full text-[10px] uppercase font-bold transition-all 
-                    ${filter === f.key ? "bg-cyan-500 text-white shadow-[0_0_10px_rgba(6,182,212,0.5)]" : "bg-white/10 text-slate-400 border border-white/5"}`}
+                  className={`px-3 py-1.5 rounded-full text-[8px] uppercase font-bold transition-all 
+                  ${
+                    filter === f.key
+                      ? "bg-cyan-500 text-white"
+                      : "bg-white/10 text-slate-400"
+                  }`}
                 >
                   {f.label}
                 </button>
@@ -139,39 +176,76 @@ export default function TransactionPage() {
                 <p>Syncing Ledger...</p>
               </div>
             ) : filtered.length === 0 ? (
-              <p className="text-center text-slate-500 py-10">No records found</p>
+              <p className="text-center text-slate-500 py-10">
+                No records found
+              </p>
             ) : (
-              filtered.map((t) => (
-                <div
-                  key={t.id}
-                  className="flex items-center gap-3 bg-white/5 backdrop-blur-md rounded-2xl p-4 border border-white/10"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
-                    {iconFor(t.type)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate">
-                      {t.description}
-                    </p>
-                    <div className="flex items-center gap-2">
-                        <p className="text-[10px] text-slate-500">{formatDate(t.date)}</p>
-                        <span className={`text-[10px] px-1.5 rounded-md uppercase font-bold ${
-                            t.status === 'approved' || t.status === 'won' ? 'text-green-500 bg-green-500/10' : 
-                            t.status === 'pending' ? 'text-yellow-500 bg-yellow-500/10' : 'text-red-500 bg-red-500/10'
-                        }`}>
-                            {t.status}
+              filtered.map((t) => {
+                const isNegative =
+                  t.type === "withdrawal" || t.status === "lost";
+
+                return (
+                  <div
+                    key={t.id}
+                    className="flex items-center gap-3 bg-white/5 rounded-2xl p-4 border border-white/10"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
+                      {iconFor(t.type)}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      {typeof t.description === "object" ? (
+                        <div className="leading-tight">
+                          <p className="text-sm text-white truncate">
+                            {t.description.event}
+                          </p>
+                          <p className="text-xs text-slate-400 truncate">
+                            {t.description.runner}
+                          </p>
+                          <p className="text-[10px] text-purple-400">
+                            {t.description.meta}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-white truncate">
+                          {t.description}
+                        </p>
+                      )}
+
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="text-[10px] text-slate-500">
+                          {formatDate(t.date)}
+                        </p>
+                        <span
+                          className={`text-[10px] px-1.5 rounded-md uppercase font-bold ${
+                            t.status === "approved" || t.status === "won"
+                              ? "text-green-500 bg-green-500/10"
+                              : t.status === "pending"
+                              ? "text-yellow-500 bg-yellow-500/10"
+                              : "text-red-500 bg-red-500/10"
+                          }`}
+                        >
+                          {t.status}
                         </span>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <p
+                        className={`text-sm font-bold ${
+                          isNegative ? "text-red-400" : "text-green-400"
+                        }`}
+                      >
+                        {isNegative ? "-" : "+"}
+                        {Number(t.amount || 0).toLocaleString()}
+                      </p>
+                      <p className="text-[10px] text-slate-500 uppercase">
+                        Chips
+                      </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className={`text-sm font-bold ${t.type === "withdrawal" || t.status === 'lost' ? "text-red-400" : "text-green-400"}`}>
-                      {t.type === "withdrawal" || t.status === 'lost' ? "-" : "+"}
-                      {Number(t.amount).toLocaleString()}
-                    </p>
-                    <p className="text-[10px] text-slate-500 font-bold uppercase">Chips</p>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
