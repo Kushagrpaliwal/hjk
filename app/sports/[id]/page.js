@@ -909,6 +909,8 @@ export default function CricketBettingPage({ params }) {
                   <h1 className="text-xl font-bold">Cricket</h1>
                 </div>
               </div>
+
+              <Link href="/deposit">
               <div className="flex items-center gap-3 bg-white/10 border border-white/20 px-4 py-2 rounded-full">
                 <span className="material-symbols-outlined text-[#39ff14] text-xl">
                   payments
@@ -918,6 +920,7 @@ export default function CricketBettingPage({ params }) {
                   <span className="text-blue-100 font-medium">₹</span>
                 </span>
               </div>
+              </Link>
             </div>
           {!loading && matchodds && (
             <div className="flex gap-3">

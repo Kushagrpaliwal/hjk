@@ -232,6 +232,7 @@ export default function GamePage() {
           </div>
         </div>
 
+      <Link href="/deposit">
         <div className="flex items-center">
           <div className="flex items-center gap-3 bg-white/5 border border-white/10 px-4 py-2 rounded-full">
             <span className="material-symbols-outlined text-[#39ff14] text-xl">
@@ -243,6 +244,7 @@ export default function GamePage() {
             </span>
           </div>
         </div>
+       </Link> 
       </header>
 
       {/* --- MARQUEE NOTE SECTION --- */}

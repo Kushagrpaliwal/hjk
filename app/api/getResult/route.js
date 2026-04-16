@@ -2,7 +2,7 @@ import dbPool from "../../../lib/db";
 
 export const dynamic = "force-dynamic";
 
-const AUTO_RUN_INTERVAL_MS = 10_000;
+const AUTO_RUN_INTERVAL_MS = 60_000;
 const AUTO_RUN_META_KEY = "__diceResultAutoRunMeta";
 
 const autoRunMeta =
@@ -36,6 +36,7 @@ async function processPendingMarkets() {
 
   for (const market of pendingMarkets) {
     const marketId = market.marketId;
+
     try {
       const eventId = market.eventId;
       const eventName = market.eventName;
@@ -44,30 +45,29 @@ async function processPendingMarkets() {
       const normalizedMarketType = String(marketType ?? "").toLowerCase();
       const apiMarketType = normalizedMarketType
         ? normalizedMarketType.toUpperCase()
-        : (marketType ?? "");
+        : marketType ?? "";
+
       const runnerName = market.runnerName;
       const isFancyMarket = normalizedMarketType === "fancy";
 
       const marketFilter =
         isFancyMarket && runnerName ? " AND runnerName = ?" : "";
+
       const betParams =
         isFancyMarket && runnerName ? [marketId, runnerName] : [marketId];
 
       const [bets] = await pool.query(
         `SELECT * FROM bets WHERE marketId = ?${marketFilter} AND status = 'Pending'`,
-        betParams,
+        betParams
       );
 
       if (!bets.length) {
-        results.push({
-          market_id: marketId,
-          action: "no_bets",
-        });
+        results.push({ market_id: marketId, action: "no_bets" });
         continue;
       }
 
       const apiMarketName = isFancyMarket
-        ? (runnerName ?? bets[0]?.runnerName ?? marketName)
+        ? runnerName ?? bets[0]?.runnerName ?? marketName
         : marketName;
 
       const externalRes = await fetch(
@@ -83,7 +83,7 @@ async function processPendingMarkets() {
             market_type: apiMarketType,
             client_ref: "dicerush99.com",
           }),
-        },
+        }
       );
 
       const data = await externalRes.json();
@@ -112,48 +112,74 @@ async function processPendingMarkets() {
         const stake = Number(bet.stake);
 
         const betTypeNormalized = String(
-          bet.gameType ?? bet.gametype ?? "",
+          bet.gameType ?? bet.gametype ?? ""
         ).toLowerCase();
+
         const betSideNormalized = String(
-          bet.betType ?? bet.bettype ?? "",
+          bet.betType ?? bet.bettype ?? ""
         ).toLowerCase();
-        const isWinner = bet.runnerName === winnerName;
 
         let profitLoss = 0;
 
-        switch (betTypeNormalized) {
-          case "matchodds":
-          case "bookmaker":
-          case "fancy":
-          default:
-            // Unified logic (Back/Lay handling)
-            if (isWinner) {
-              if (betSideNormalized === "back") {
-                profitLoss = (stake * odds) / 100 + stake;
-              } else if (betSideNormalized === "lay") {
-                profitLoss = -stake;
-              }
-            } else {
-              if (betSideNormalized === "back") {
-                profitLoss = -stake;
-              } else if (betSideNormalized === "lay") {
-                profitLoss = (stake * odds) / 100 + stake;
-              }
-            }
-            break;
+        // ✅ FANCY LOGIC
+        if (betTypeNormalized === "fancy") {
+          const betOdds = Number(bet.odds);
+          const stakeAmt = Number(bet.stake);
+          const marketSize = Number(bet.marketSize || bet.odds);
+          const winnerValue = Number(winnerName);
+
+          if (isNaN(winnerValue)) {
+            results.push({
+              market_id: marketId,
+              action: "invalid_fancy_result",
+            });
+            continue;
+          }
+
+          const isBackWin =
+            betSideNormalized === "back" && betOdds <= winnerValue;
+
+          const isLayWin =
+            betSideNormalized === "lay" && betOdds > winnerValue;
+
+          if (isBackWin || isLayWin) {
+            const profitWithoutStake = (marketSize / 100) * stakeAmt;
+            profitLoss = profitWithoutStake + stakeAmt;
+          } else {
+            profitLoss = -stakeAmt;
+          }
         }
 
-        // ✅ Wallet update (IMPORTANT: handles both profit & loss)
+        // ✅ MATCH ODDS / BOOKMAKER
+        else {
+          const isWinner = bet.runnerName === winnerName;
+
+          if (isWinner) {
+            if (betSideNormalized === "back") {
+              profitLoss = (stake * odds) / 100 + stake;
+            } else if (betSideNormalized === "lay") {
+              profitLoss = -stake;
+            }
+          } else {
+            if (betSideNormalized === "back") {
+              profitLoss = -stake;
+            } else if (betSideNormalized === "lay") {
+              profitLoss = (stake * odds) / 100 + stake;
+            }
+          }
+        }
+
+        // ✅ Wallet update
         await pool.query(
           `UPDATE users SET wallet = wallet + ? WHERE username = ?`,
-          [profitLoss, bet.username],
+          [profitLoss, bet.username]
         );
 
-        // ✅ Bet status update
-        await pool.query(`UPDATE bets SET status = ? WHERE id = ?`, [
-          profitLoss > 0 ? "Won" : "Lost",
-          bet.id,
-        ]);
+        // ✅ Update bet status
+        await pool.query(
+          `UPDATE bets SET status = ? WHERE id = ?`,
+          [profitLoss > 0 ? "Won" : "Lost", bet.id]
+        );
       }
 
       results.push({
@@ -194,9 +220,7 @@ async function executeCycle() {
 }
 
 function scheduleAutoRun() {
-  if (autoRunMeta.started) {
-    return;
-  }
+  if (autoRunMeta.started) return;
 
   autoRunMeta.started = true;
 
@@ -205,15 +229,14 @@ function scheduleAutoRun() {
       console.log("[getResult cron] starting cycle");
       const result = await executeCycle();
       console.log(
-        `[getResult cron] cycle complete: processed=${result?.processed ?? 0} success=${result?.success}`,
+        `[getResult cron] done: processed=${result?.processed ?? 0}`
       );
     } catch (err) {
-      console.error("Auto-run cycle failure:", err);
+      console.error("Auto-run error:", err);
     }
   };
 
   autoRunMeta.interval = setInterval(runSafely, AUTO_RUN_INTERVAL_MS);
-
   autoRunMeta.interval?.unref?.();
 
   runSafely();
@@ -221,9 +244,8 @@ function scheduleAutoRun() {
 
 scheduleAutoRun();
 
-export async function GET(req) {
-  console.log("[getResult manual] GET handler invoked");
+export async function GET() {
+  console.log("[manual trigger]");
   const result = await executeCycle();
-  console.log("[getResult manual] returning", result);
   return Response.json(result);
 }
