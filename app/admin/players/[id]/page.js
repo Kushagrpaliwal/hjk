@@ -31,6 +31,9 @@ export default function PlayerDetailPage() {
     const [loading, setLoading] = useState(true);
     const [updating, setUpdating] = useState(false);
     const [error, setError] = useState("");
+    const [walletAction, setWalletAction] = useState("credit");
+    const [walletAmount, setWalletAmount] = useState("");
+    const [walletNote, setWalletNote] = useState("");
 
     useEffect(() => {
         if (!playerId) return;
@@ -65,6 +68,7 @@ export default function PlayerDetailPage() {
     const handleStatusToggle = async () => {
         if (!player || updating) return;
         const nextStatus = player.status?.toLowerCase() === "active" ? "suspended" : "active";
+        setWalletNote("");
         setUpdating(true);
         try {
             const res = await fetch("/api/users", {
@@ -77,6 +81,47 @@ export default function PlayerDetailPage() {
             setPlayer(prev => ({ ...prev, status: nextStatus }));
         } catch (err) {
             alert(err.message);
+        } finally {
+            setUpdating(false);
+        }
+    };
+
+    const handleWalletUpdate = async (event) => {
+        event.preventDefault();
+        if (!player || updating) return;
+
+        const amount = Number(walletAmount);
+        if (!Number.isFinite(amount) || amount <= 0) {
+            setWalletNote("Enter a valid wallet amount.");
+            return;
+        }
+
+        setUpdating(true);
+        setWalletNote("");
+
+        try {
+            const res = await fetch("/api/users", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    id: player.id,
+                    walletAction,
+                    amount,
+                }),
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error || "Failed to update wallet");
+
+            setPlayer((prev) => ({
+                ...prev,
+                wallet: data.data.wallet,
+            }));
+            setWalletAmount("");
+            setWalletNote(
+                `${walletAction === "credit" ? "Added" : "Debited"} ${formatMoney(amount)} successfully.`
+            );
+        } catch (err) {
+            setWalletNote(err.message);
         } finally {
             setUpdating(false);
         }
@@ -192,6 +237,71 @@ export default function PlayerDetailPage() {
                     <h3 className="font-bold text-slate-900">Activity History</h3>
                     <p className="text-sm text-slate-400 mt-2 max-w-[200px]">Historical data for this player is not yet available.</p>
                 </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h3 className="text-lg font-bold text-slate-900">Wallet Controls</h3>
+                        <p className="text-sm text-slate-500">Admin can credit or debit this player wallet instantly.</p>
+                    </div>
+                    <div className="rounded-2xl bg-slate-50 px-4 py-3 text-right">
+                        <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Current Wallet</p>
+                        <p className="text-lg font-black text-slate-900">{formatMoney(player?.wallet)}</p>
+                    </div>
+                </div>
+
+                <form onSubmit={handleWalletUpdate} className="mt-6 grid gap-4 md:grid-cols-[180px_minmax(0,1fr)_auto]">
+                    <label className="space-y-2">
+                        <span className="text-sm font-semibold text-slate-700">Action</span>
+                        <select
+                            value={walletAction}
+                            onChange={(e) => setWalletAction(e.target.value)}
+                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-indigo-400"
+                        >
+                            <option value="credit">Credit Wallet</option>
+                            <option value="debit">Debit Wallet</option>
+                        </select>
+                    </label>
+
+                    <label className="space-y-2">
+                        <span className="text-sm font-semibold text-slate-700">Amount</span>
+                        <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            inputMode="decimal"
+                            value={walletAmount}
+                            onChange={(e) => setWalletAmount(e.target.value)}
+                            placeholder="Enter amount in INR"
+                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-400"
+                        />
+                    </label>
+
+                    <button
+                        type="submit"
+                        disabled={updating}
+                        className={`mt-auto rounded-2xl px-5 py-3 text-sm font-bold text-white transition ${
+                            walletAction === "credit"
+                                ? "bg-emerald-600 hover:bg-emerald-700"
+                                : "bg-amber-500 hover:bg-amber-600"
+                        } disabled:cursor-not-allowed disabled:opacity-70`}
+                    >
+                        {updating ? "Updating..." : walletAction === "credit" ? "Add Funds" : "Deduct Funds"}
+                    </button>
+                </form>
+
+                {walletNote ? (
+                    <div
+                        className={`mt-4 rounded-2xl border px-4 py-3 text-sm font-medium ${
+                            walletNote.toLowerCase().includes("successfully")
+                                ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+                                : "border-red-100 bg-red-50 text-red-600"
+                        }`}
+                    >
+                        {walletNote}
+                    </div>
+                ) : null}
             </div>
         </div>
     );
