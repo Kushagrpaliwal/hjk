@@ -27,7 +27,7 @@ export async function GET(req) {
     const timeoutId = setTimeout(() => controller.abort(), 4500);
 
     const res = await fetch(
-      `http://46.202.166.160:3009/getPriveteData?gmid=${gmid}&sid=4&key=knkwdnwqusqnsqlnlnslqnle5557878dwdwdwd`,
+      `http://46.202.166.160:3009/getPriveteData?gmid=${gmid}&sid=4&key=wwewdaUjbggsf56uibbhyunkhy7nhdrghjhhua`,
       { signal: controller.signal }
     );
     clearTimeout(timeoutId);
