@@ -2,7 +2,13 @@
 import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-export default function DataTable({ columns, data, itemsPerPage = 8, flexWrapper = false }) {
+export default function DataTable({
+    columns,
+    data,
+    itemsPerPage = 8,
+    flexWrapper = false,
+    getRowClassName,
+}) {
     const [page, setPage] = useState(1);
     const totalPages = Math.ceil(data.length / itemsPerPage);
     const paginatedData = data.slice((page - 1) * itemsPerPage, page * itemsPerPage);
@@ -10,7 +16,7 @@ export default function DataTable({ columns, data, itemsPerPage = 8, flexWrapper
 
     return (
         <div className={`${wrapperClass} overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm`}>
-            <div className="min-h-0 flex-1 overflow-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-auto">
                 <table className="min-w-full border-collapse">
                     <thead className="sticky top-0 z-10">
                         <tr>
@@ -36,6 +42,8 @@ export default function DataTable({ columns, data, itemsPerPage = 8, flexWrapper
                                 <tr
                                     key={idx}
                                     className={`border-b border-slate-100 transition-colors hover:bg-slate-50 ${
+                                        getRowClassName ? getRowClassName(row, idx) : ""
+                                    } ${
                                         idx === paginatedData.length - 1 ? "border-b-0" : ""
                                     }`}
                                 >

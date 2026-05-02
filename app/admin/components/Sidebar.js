@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { X, LayoutDashboard, Users, ArrowLeftRight, ArrowDownCircle, ArrowUpCircle, CreditCard, Gamepad2, KeyRound, Gem } from "lucide-react";
+import { X, LayoutDashboard, Users, ArrowLeftRight, ArrowDownCircle, ArrowUpCircle, CreditCard, Gamepad2, KeyRound, Gem, ListChecks } from "lucide-react";
 
 const menuItems = [
     { label: "Dashboard", icon: LayoutDashboard, href: "/admin/dashboard" },
@@ -10,6 +10,7 @@ const menuItems = [
     { label: "Deposit Requests", icon: ArrowDownCircle, href: "/admin/deposits" },
     { label: "Withdrawal Requests", icon: ArrowUpCircle, href: "/admin/withdrawals" },
     { label: "Payment Settings", icon: CreditCard, href: "/admin/payment-settings" },
+    { label: "Fancy Results", icon: ListChecks, href: "/admin/fancy-results" },
     { label: "Game History", icon: Gamepad2, href: "/admin/game-history" },
     { label: "Change Password", icon: KeyRound, href: "/admin/change-password" },
 ];
