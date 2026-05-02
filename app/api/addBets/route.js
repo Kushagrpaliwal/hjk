@@ -71,6 +71,29 @@ export async function POST(req) {
       );
     }
 
+    const normalizedMatchType = String(match_type || "").toLowerCase();
+    const normalizedBetType = String(betType || "").toLowerCase();
+
+    let walletDeductionAmount = stakeAmount;
+
+    if (normalizedBetType === "lay") {
+      if (normalizedMatchType === "matchodds") {
+        walletDeductionAmount = ((parsedOdds - 1) * stakeAmount) / 100;
+      } else if (normalizedMatchType === "bookmaker") {
+        walletDeductionAmount = (stakeAmount * parsedOdds) / 100;
+      }
+    }
+
+    if (
+      !Number.isFinite(walletDeductionAmount) ||
+      walletDeductionAmount <= 0
+    ) {
+      return Response.json(
+        { success: false, message: "Invalid wallet deduction amount" },
+        { status: 400 }
+      );
+    }
+
     const normalizeNumber = (value) => {
       if (value === undefined || value === null || value === "") return null;
       const parsed = Number(value);
@@ -105,7 +128,7 @@ export async function POST(req) {
 
       const wallet = Number(userRow.wallet || 0);
 
-      if (wallet < stakeAmount) {
+      if (wallet < walletDeductionAmount) {
         await connection.rollback();
         return Response.json(
           { success: false, message: "Insufficient balance" },
@@ -132,7 +155,7 @@ export async function POST(req) {
       // 💰 Deduct wallet
       await connection.query(
         "UPDATE users SET wallet = wallet - ? WHERE id = ?",
-        [stakeAmount, userRow.id]
+        [walletDeductionAmount, userRow.id]
       );
 
       // 📝 Insert bet (ALWAYS)
@@ -213,7 +236,7 @@ export async function POST(req) {
           externalOk,
           duplicate: isDuplicateBet,
           message: "Bet placed successfully",
-          walletRemaining: wallet - stakeAmount,
+          walletRemaining: wallet - walletDeductionAmount,
         },
         { status: 201 }
       );

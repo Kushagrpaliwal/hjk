@@ -1,4 +1,4 @@
-import dbPool from "../../../lib/db";
+﻿import dbPool from "../../../lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +11,53 @@ const autoRunMeta =
 
 let lastRunResult = { success: true, processed: 0, results: [] };
 let cycleRunning = false;
+
+function getStandardProfitLoss(bet, winnerName) {
+  const betOdds = Number(bet.odds);
+  const stakeAmt = Number(bet.stake);
+  const normalizedGameType = String(
+    bet.gameType ?? bet.gametype ?? ""
+  ).toLowerCase();
+  const betSideNormalized = String(
+    bet.betType ?? bet.bettype ?? ""
+  ).toLowerCase();
+
+  if (!Number.isFinite(betOdds) || !Number.isFinite(stakeAmt)) {
+    throw new Error("Invalid bet odds or stake");
+  }
+
+  const isWinner = bet.runnerName === winnerName;
+  const isMatchOdds =
+    normalizedGameType === "matchodds" ||
+    normalizedGameType === "match odds";
+  const isBookmaker = normalizedGameType === "bookmaker";
+
+  if (isWinner) {
+    if (betSideNormalized === "back") {
+      if (isMatchOdds) {
+        return ((betOdds - 1) * stakeAmt) / 100 + stakeAmt;
+      }
+
+      if (isBookmaker) {
+        return (stakeAmt * betOdds) / 100 + stakeAmt;
+      }
+    } else if (betSideNormalized === "lay") {
+      return -0;
+    }
+  } else {
+    if (betSideNormalized === "back") {
+      return -0;
+    }
+
+    if (betSideNormalized === "lay") {
+      return stakeAmt;
+    }
+  }
+
+  throw new Error(
+    `Unsupported standard market settlement: ${bet.gameType}/${bet.betType}`
+  );
+}
 
 async function processPendingMarkets() {
   const pool = dbPool;
@@ -108,9 +155,6 @@ async function processPendingMarkets() {
       }
 
       for (const bet of bets) {
-        const odds = Number(bet.odds);
-        const stake = Number(bet.stake);
-
         const betTypeNormalized = String(
           bet.gameType ?? bet.gametype ?? ""
         ).toLowerCase();
@@ -146,27 +190,13 @@ async function processPendingMarkets() {
             const profitWithoutStake = (marketSize / 100) * stakeAmt;
             profitLoss = profitWithoutStake + stakeAmt;
           } else {
-            profitLoss = -stakeAmt;
+            profitLoss = -0;
           }
         }
 
         // ✅ MATCH ODDS / BOOKMAKER
         else {
-          const isWinner = bet.runnerName === winnerName;
-
-          if (isWinner) {
-            if (betSideNormalized === "back") {
-              profitLoss = (stake * odds) / 100 + stake;
-            } else if (betSideNormalized === "lay") {
-              profitLoss = -stake;
-            }
-          } else {
-            if (betSideNormalized === "back") {
-              profitLoss = -stake;
-            } else if (betSideNormalized === "lay") {
-              profitLoss = (stake * odds) / 100 + stake;
-            }
-          }
+          profitLoss = getStandardProfitLoss(bet, winnerName);
         }
 
         // ✅ Wallet update
