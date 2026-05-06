@@ -1,6 +1,10 @@
 import pool from "../../../../lib/db";
 import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
+import {
+  ensureTransactionLogTable,
+  insertTransactionLog,
+} from "../../../../lib/transactionLog";
 
 const CASHFREE_API_VERSION = process.env.CASHFREE_API_VERSION || "2023-08-01";
 
@@ -33,6 +37,7 @@ const getAuthUserId = (request) => {
 
 export async function POST(request) {
   try {
+    await ensureTransactionLogTable(pool);
     const userId = getAuthUserId(request);
     if (!userId) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
@@ -93,10 +98,27 @@ export async function POST(request) {
             "UPDATE recharges SET status = 'approved' WHERE id = ? AND status <> 'approved'",
             [recharge.id]
           );
-          await connection.query("UPDATE users SET wallet = wallet + ? WHERE id = ?", [
-            recharge.amount,
-            userId,
-          ]);
+          const [[userRow]] = await connection.query(
+            "SELECT username, wallet FROM users WHERE id = ? FOR UPDATE",
+            [userId]
+          );
+          if (!userRow) {
+            throw new Error("User not found for cashfree credit");
+          }
+
+          const previousBalance = Number(userRow.wallet || 0);
+          const profitLoss = Number(recharge.amount || 0);
+          const currentBalance = previousBalance + profitLoss;
+
+          await connection.query("UPDATE users SET wallet = ? WHERE id = ?", [currentBalance, userId]);
+          await insertTransactionLog(connection, {
+            username: userRow.username || `user_${userId}`,
+            previousBalance,
+            profitLoss,
+            currentBalance,
+            transactionType: "DEPOSIT_APPROVED_CASHFREE",
+            referenceSource: "deposit",
+          });
           await connection.commit();
         } catch (err) {
           await connection.rollback();

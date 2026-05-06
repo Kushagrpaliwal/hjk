@@ -1,4 +1,8 @@
 ﻿import dbPool from "../../../lib/db";
+import {
+  ensureTransactionLogTable,
+  insertSportsTransactionLog,
+} from "../../../lib/transactionLog";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +39,7 @@ function getStandardProfitLoss(bet, winnerName) {
   if (isWinner) {
     if (betSideNormalized === "back") {
       if (isMatchOdds) {
-        return ((betOdds - 1) * stakeAmt) / 100 + stakeAmt;
+        return ((betOdds - 1) * stakeAmt) + stakeAmt;
       }
 
       if (isBookmaker) {
@@ -61,6 +65,7 @@ function getStandardProfitLoss(bet, winnerName) {
 
 async function processPendingMarkets() {
   const pool = dbPool;
+  await ensureTransactionLogTable(pool);
 
   const pendingQuery = `
     SELECT DISTINCT eventId, eventName, marketId, marketName, gameType, runnerName
@@ -97,24 +102,8 @@ async function processPendingMarkets() {
       const runnerName = market.runnerName;
       const isFancyMarket = normalizedMarketType === "fancy";
 
-      const marketFilter =
-        isFancyMarket && runnerName ? " AND runnerName = ?" : "";
-
-      const betParams =
-        isFancyMarket && runnerName ? [marketId, runnerName] : [marketId];
-
-      const [bets] = await pool.query(
-        `SELECT * FROM bets WHERE marketId = ?${marketFilter} AND status = 'Pending'`,
-        betParams
-      );
-
-      if (!bets.length) {
-        results.push({ market_id: marketId, action: "no_bets" });
-        continue;
-      }
-
       const apiMarketName = isFancyMarket
-        ? runnerName ?? bets[0]?.runnerName ?? marketName
+        ? runnerName ?? marketName
         : marketName;
 
       const externalRes = await fetch(
@@ -153,69 +142,123 @@ async function processPendingMarkets() {
         results.push({ market_id: marketId, action: "no_winner" });
         continue;
       }
+      const connection = await pool.getConnection();
+      let settledCount = 0;
 
-      for (const bet of bets) {
-        const betTypeNormalized = String(
-          bet.gameType ?? bet.gametype ?? ""
-        ).toLowerCase();
+      try {
+        await connection.beginTransaction();
+        const marketFilter =
+          isFancyMarket && runnerName ? " AND runnerName = ?" : "";
+        const betParams =
+          isFancyMarket && runnerName ? [marketId, runnerName] : [marketId];
+        const [bets] = await connection.query(
+          `SELECT * FROM bets WHERE marketId = ?${marketFilter} AND status = 'Pending' FOR UPDATE`,
+          betParams
+        );
 
-        const betSideNormalized = String(
-          bet.betType ?? bet.bettype ?? ""
-        ).toLowerCase();
+        if (!bets.length) {
+          await connection.rollback();
+          results.push({ market_id: marketId, action: "no_bets" });
+          continue;
+        }
 
-        let profitLoss = 0;
+        for (const bet of bets) {
+          const betTypeNormalized = String(
+            bet.gameType ?? bet.gametype ?? ""
+          ).toLowerCase();
 
-        // ✅ FANCY LOGIC
-        if (betTypeNormalized === "fancy") {
-          const betOdds = Number(bet.odds);
-          const stakeAmt = Number(bet.stake);
-          const marketSize = Number(bet.marketSize || bet.odds);
-          const winnerValue = Number(winnerName);
+          const betSideNormalized = String(
+            bet.betType ?? bet.bettype ?? ""
+          ).toLowerCase();
 
-          if (isNaN(winnerValue)) {
-            results.push({
-              market_id: marketId,
-              action: "invalid_fancy_result",
-            });
-            continue;
-          }
+          let profitLoss = 0;
 
-          const isBackWin =
-            betSideNormalized === "back" && betOdds <= winnerValue;
+          if (betTypeNormalized === "fancy") {
+            const betOdds = Number(bet.odds);
+            const stakeAmt = Number(bet.stake);
+            const marketSize = Number(bet.marketSize || bet.size || bet.odds);
+            const winnerValue = Number(winnerName);
 
-          const isLayWin =
-            betSideNormalized === "lay" && betOdds > winnerValue;
+            if (isNaN(winnerValue)) {
+              results.push({
+                market_id: marketId,
+                action: "invalid_fancy_result",
+              });
+              continue;
+            }
 
-          if (isBackWin || isLayWin) {
-            const profitWithoutStake = (marketSize / 100) * stakeAmt;
-            profitLoss = profitWithoutStake + stakeAmt;
+            const isBackWin =
+              betSideNormalized === "back" && betOdds <= winnerValue;
+            const isLayWin = betSideNormalized === "lay" && betOdds > winnerValue;
+
+            if (isBackWin || isLayWin) {
+              const profitWithoutStake = (marketSize / 100) * stakeAmt;
+              profitLoss = profitWithoutStake + stakeAmt;
+            } else {
+              profitLoss = -0;
+            }
           } else {
-            profitLoss = -0;
+            profitLoss = getStandardProfitLoss(bet, winnerName);
           }
+
+          const [[userWalletRow]] = await connection.query(
+            `SELECT wallet FROM users WHERE username = ? FOR UPDATE`,
+            [bet.username]
+          );
+
+          if (!userWalletRow) {
+            throw new Error(`User not found for settlement: ${bet.username}`);
+          }
+
+          const previousBalance = Number(userWalletRow.wallet || 0);
+          const currentBalance = previousBalance + Number(profitLoss || 0);
+
+          await connection.query(
+            `UPDATE users SET wallet = ? WHERE username = ?`,
+            [currentBalance, bet.username]
+          );
+
+          const nextStatus = profitLoss > 0 ? "Won" : "Lost";
+          await connection.query(`UPDATE bets SET status = ? WHERE id = ?`, [
+            nextStatus,
+            bet.id,
+          ]);
+
+          await insertSportsTransactionLog(connection, {
+            betId: bet.id,
+            username: bet.username,
+            eventId: bet.eventId ?? null,
+            eventName: bet.eventName ?? null,
+            marketId: bet.marketId ?? null,
+            marketName: bet.marketName ?? null,
+            gameType: bet.gameType ?? null,
+            betType: bet.betType ?? null,
+            runnerName: bet.runnerName ?? null,
+            odds: Number(bet.odds || 0),
+            stake: Number(bet.stake || 0),
+            previousBalance,
+            profitLoss: Number(profitLoss || 0),
+            currentBalance,
+            transactionType: "BET_SETTLED",
+            betStatus: nextStatus,
+          });
+
+          settledCount += 1;
         }
 
-        // ✅ MATCH ODDS / BOOKMAKER
-        else {
-          profitLoss = getStandardProfitLoss(bet, winnerName);
-        }
-
-        // ✅ Wallet update
-        await pool.query(
-          `UPDATE users SET wallet = wallet + ? WHERE username = ?`,
-          [profitLoss, bet.username]
-        );
-
-        // ✅ Update bet status
-        await pool.query(
-          `UPDATE bets SET status = ? WHERE id = ?`,
-          [profitLoss > 0 ? "Won" : "Lost", bet.id]
-        );
+        await connection.commit();
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      } finally {
+        connection.release();
       }
 
       results.push({
         market_id: marketId,
         action: "settled",
         winner: winnerName,
+        settledCount,
       });
     } catch (err) {
       console.error("Market error:", err);

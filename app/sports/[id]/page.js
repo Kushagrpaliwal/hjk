@@ -981,7 +981,7 @@ export default function CricketBettingPage({ params }) {
                     <div className="rounded-xl overflow-hidden border border-slate-100 bg-white shadow-sm">
                       <iframe
                         title="Live Score"
-                        src={`https://score.akamaized.uk/diamond-live-score?id=${id}`}
+                        src={`https://score.akamaized.uk/diamond-live-score?gmid=${id}`}
                         className="w-full h-[220px] bg-white"
                       />
                     </div>

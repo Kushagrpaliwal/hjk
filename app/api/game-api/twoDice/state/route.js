@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import pool from "../../../../../lib/db";
+import {
+  ensureTransactionLogTable,
+  insertTransactionLog,
+} from "../../../../../lib/transactionLog";
 
 const BETTING_SECONDS = 10;
 const ROUND_SECONDS = 15;
@@ -106,12 +110,43 @@ async function settlePendingTwoDiceBets(connection) {
       [isWon ? "won" : "lost", String(parsedResult.sum), bet.id]
     );
 
-    if (updateBet.affectedRows > 0 && isWon) {
-      const payout = Number(bet.bet_amount) * 2;
-      await connection.query(
-        `UPDATE users SET wallet = wallet + ? WHERE id = ?`,
-        [payout, bet.user_id]
+    if (updateBet.affectedRows > 0) {
+      const [[userRow]] = await connection.query(
+        `SELECT username, wallet FROM users WHERE id = ? FOR UPDATE`,
+        [bet.user_id]
       );
+      if (!userRow) {
+        throw new Error(`User not found for two_dice settlement: ${bet.user_id}`);
+      }
+
+      const previousBalance = Number(userRow.wallet || 0);
+      const payout = isWon ? Number(bet.bet_amount) * 2 : 0;
+      const currentBalance = previousBalance + payout;
+
+      if (isWon) {
+        await connection.query(`UPDATE users SET wallet = ? WHERE id = ?`, [
+          currentBalance,
+          bet.user_id,
+        ]);
+      }
+
+      await insertTransactionLog(connection, {
+        betId: bet.id,
+        username: userRow.username || `user_${bet.user_id}`,
+        eventName: `Two Dice #${bet.game_result}`,
+        marketName: "two_dice",
+        gameType: "two_dice",
+        betType: "sum",
+        runnerName: String(betOnSum),
+        odds: 2,
+        stake: Number(bet.bet_amount || 0),
+        previousBalance,
+        profitLoss: payout,
+        currentBalance: isWon ? currentBalance : previousBalance,
+        transactionType: "DICE_BET_SETTLED",
+        referenceSource: "dice_two",
+        betStatus: isWon ? "Won" : "Lost",
+      });
     }
   }
 }
@@ -126,6 +161,7 @@ export async function GET(req) {
   let connection;
 
   try {
+    await ensureTransactionLogTable(pool);
     connection = await pool.getConnection();
 
     /* ✅ SETTLE FIRST */

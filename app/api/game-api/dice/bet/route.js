@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import pool from "../../../../../lib/db";
+import {
+  ensureTransactionLogTable,
+  insertTransactionLog,
+} from "../../../../../lib/transactionLog";
 
 const BETTING_SECONDS = 10;
 
@@ -67,6 +71,7 @@ export async function POST(req) {
 
   let connection;
   try {
+    await ensureTransactionLogTable(pool);
     connection = await pool.getConnection();
     await connection.beginTransaction();
 
@@ -93,7 +98,7 @@ export async function POST(req) {
     }
 
     const [[userRow]] = await connection.query(
-      `SELECT wallet FROM users WHERE id = ? FOR UPDATE`,
+      `SELECT username, wallet FROM users WHERE id = ? FOR UPDATE`,
       [userId]
     );
 
@@ -103,16 +108,33 @@ export async function POST(req) {
       return NextResponse.json({ error: "Insufficient balance" }, { status: 400 });
     }
 
-    await connection.query(`UPDATE users SET wallet = wallet - ? WHERE id = ?`, [
-      betAmount,
-      userId,
-    ]);
+    const previousBalance = wallet;
+    const profitLoss = -betAmount;
+    const currentBalance = wallet - betAmount;
+    await connection.query(`UPDATE users SET wallet = ? WHERE id = ?`, [currentBalance, userId]);
 
-    await connection.query(
+    const [betInsert] = await connection.query(
       `INSERT INTO user_bets (user_id, bet_amount, game_type, bet_on, status, result)
       VALUES (?, ?, 'one_dice', ?, 'pending', ?)`,
       [userId, betAmount, String(betOn), latestGame.period]
     );
+
+    await insertTransactionLog(connection, {
+      betId: betInsert.insertId,
+      username: userRow?.username || `user_${userId}`,
+      eventName: `One Dice #${latestGame.period}`,
+      marketName: "one_dice",
+      gameType: "one_dice",
+      betType: "number",
+      runnerName: String(betOn),
+      odds: 6,
+      stake: betAmount,
+      previousBalance,
+      profitLoss,
+      currentBalance,
+      transactionType: "DICE_BET_PLACED",
+      referenceSource: "dice_one",
+    });
 
     await connection.commit();
 
@@ -122,7 +144,7 @@ export async function POST(req) {
         period: latestGame.period,
         betAmount,
         betOn,
-        wallet: wallet - betAmount,
+        wallet: currentBalance,
       },
       { status: 201 }
     );

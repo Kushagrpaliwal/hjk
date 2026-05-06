@@ -1,5 +1,9 @@
 import pool from "../../../lib/db";
 import { NextResponse } from "next/server";
+import {
+    ensureTransactionLogTable,
+    insertTransactionLog,
+} from "../../../lib/transactionLog";
 
 export async function GET() {
     try {
@@ -31,6 +35,7 @@ export async function PATCH(request) {
         }
 
         if (typeof walletAction !== "undefined" || typeof amount !== "undefined") {
+            await ensureTransactionLogTable(pool);
             const normalizedAction = String(walletAction || "").toLowerCase();
             const parsedAmount = Number(amount);
             const allowedActions = ["credit", "debit"];
@@ -43,21 +48,48 @@ export async function PATCH(request) {
                 return NextResponse.json({ success: false, error: "Enter a valid amount" }, { status: 400 });
             }
 
-            const [rows] = await pool.query("SELECT wallet FROM users WHERE id = ? LIMIT 1", [id]);
-            if (rows.length === 0) {
-                return NextResponse.json({ success: false, error: "User not found" }, { status: 404 });
+            const connection = await pool.getConnection();
+            let nextWallet = 0;
+            try {
+                await connection.beginTransaction();
+                const [rows] = await connection.query(
+                    "SELECT username, wallet FROM users WHERE id = ? LIMIT 1 FOR UPDATE",
+                    [id]
+                );
+                if (rows.length === 0) {
+                    await connection.rollback();
+                    return NextResponse.json({ success: false, error: "User not found" }, { status: 404 });
+                }
+
+                const currentWallet = Number(rows[0].wallet || 0);
+                const username = rows[0].username || `user_${id}`;
+
+                if (normalizedAction === "debit" && currentWallet < parsedAmount) {
+                    await connection.rollback();
+                    return NextResponse.json({ success: false, error: "Insufficient wallet balance for debit" }, { status: 400 });
+                }
+
+                nextWallet = normalizedAction === "credit"
+                    ? currentWallet + parsedAmount
+                    : currentWallet - parsedAmount;
+
+                await connection.query("UPDATE users SET wallet = ? WHERE id = ?", [nextWallet, id]);
+                await insertTransactionLog(connection, {
+                    username,
+                    previousBalance: currentWallet,
+                    profitLoss: normalizedAction === "credit" ? parsedAmount : -parsedAmount,
+                    currentBalance: nextWallet,
+                    transactionType: normalizedAction === "credit" ? "ADMIN_WALLET_CREDIT" : "ADMIN_WALLET_DEBIT",
+                    referenceSource: "admin_wallet",
+                });
+
+                await connection.commit();
+            } catch (error) {
+                await connection.rollback();
+                throw error;
+            } finally {
+                connection.release();
             }
-
-            const currentWallet = Number(rows[0].wallet || 0);
-            if (normalizedAction === "debit" && currentWallet < parsedAmount) {
-                return NextResponse.json({ success: false, error: "Insufficient wallet balance for debit" }, { status: 400 });
-            }
-
-            const nextWallet = normalizedAction === "credit"
-                ? currentWallet + parsedAmount
-                : currentWallet - parsedAmount;
-
-            await pool.query("UPDATE users SET wallet = ? WHERE id = ?", [nextWallet, id]);
 
             return NextResponse.json({
                 success: true,

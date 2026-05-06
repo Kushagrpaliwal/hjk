@@ -72,11 +72,28 @@ export default function DashboardPage() {
                     if (b.status === 'lost') totalRev += Number(b.bet_amount);
                     if (b.status === 'won') totalRev -= Number(b.bet_amount);
 
-                    const type = b.status === "won" ? "Win" : "Loss";
+                    const normalizedStatus = String(b.status || "").toLowerCase();
+                    const isSports = b.source === "sports";
+                    const type =
+                        normalizedStatus === "won"
+                            ? isSports
+                                ? "Sports Win"
+                                : "Win"
+                            : normalizedStatus === "lost"
+                                ? isSports
+                                    ? "Sports Loss"
+                                    : "Loss"
+                                : isSports
+                                    ? "Sports Bet"
+                                    : "Bet";
+
                     txns.push({
-                        id: `BET-${b.id}`, player: b.username || "—", type: type,
+                        id: `${isSports ? "SPT" : "BET"}-${b.id}`, player: b.username || "-", type: type,
+                        details: b.details || "-",
                         amount: Number(b.bet_amount || 0).toLocaleString(),
-                        status: "Completed",
+                        status: normalizedStatus
+                            ? normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1)
+                            : "Pending",
                         date: new Date(b.created_by).toLocaleDateString(),
                         timestamp: new Date(b.created_by).getTime()
                     });
@@ -184,10 +201,10 @@ export default function DashboardPage() {
                                             alignItems: "center",
                                             justifyContent: "center",
                                             fontSize: 16,
-                                            background: (txn.type === "Deposit" || txn.type === "Win") ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)",
+                                            background: (txn.type === "Deposit" || txn.type === "Win" || txn.type === "Sports Win") ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)",
                                         }}
                                     >
-                                        {txn.type === "Deposit" ? "↓" : txn.type === "Withdrawal" ? "↑" : txn.type === "Win" ? "🏆" : "📉"}
+                                        {txn.type === "Deposit" ? "↓" : txn.type === "Withdrawal" ? "↑" : txn.type === "Win" || txn.type === "Sports Win" ? "🏆" : "📉"}
                                     </div>
                                     <div style={{ minWidth: 0 }}>
                                         <div style={{ fontSize: 13.5, fontWeight: 600, color: "#1E293B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -196,6 +213,11 @@ export default function DashboardPage() {
                                         <div style={{ fontSize: 12, color: "#94A3B8", fontWeight: 500, marginTop: 2 }}>
                                             {txn.type} · {txn.date}
                                         </div>
+                                        {txn.details && txn.details !== "-" ? (
+                                            <div style={{ fontSize: 11, color: "#64748B", fontWeight: 500, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 220 }}>
+                                                {txn.details}
+                                            </div>
+                                        ) : null}
                                     </div>
                                 </div>
                                 <div style={{ textAlign: "right", flexShrink: 0 }}>
@@ -204,10 +226,10 @@ export default function DashboardPage() {
                                             fontSize: 14,
                                             fontWeight: 700,
                                             marginBottom: 4,
-                                            color: (txn.type === "Deposit" || txn.type === "Win") ? "#22C55E" : "#EF4444"
+                                            color: (txn.type === "Deposit" || txn.type === "Win" || txn.type === "Sports Win") ? "#22C55E" : "#EF4444"
                                         }}
                                     >
-                                        {(txn.type === "Deposit" || txn.type === "Win") ? "+" : "-"}{txn.amount}
+                                        {(txn.type === "Deposit" || txn.type === "Win" || txn.type === "Sports Win") ? "+" : "-"}{txn.amount}
                                     </div>
                                     <StatusBadge status={txn.status} />
                                 </div>
