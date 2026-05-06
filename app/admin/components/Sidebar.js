@@ -1,12 +1,14 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { X, LayoutDashboard, Users, ArrowLeftRight, ArrowDownCircle, ArrowUpCircle, CreditCard, Gamepad2, KeyRound, Gem, ListChecks } from "lucide-react";
+import { X, LayoutDashboard, Users, ArrowLeftRight, ArrowDownCircle, ArrowUpCircle, CreditCard, Gamepad2, KeyRound, Gem, ListChecks, ScrollText, FileText } from "lucide-react";
 
 const menuItems = [
     { label: "Dashboard", icon: LayoutDashboard, href: "/admin/dashboard" },
     { label: "Player Management", icon: Users, href: "/admin/players" },
     { label: "Player Transactions", icon: ArrowLeftRight, href: "/admin/transactions" },
+    { label: "Sports Bets", icon: ScrollText, href: "/admin/sports-bets" },
+    { label: "Sports Log", icon: FileText, href: "/admin/transaction-log" },
     { label: "Deposit Requests", icon: ArrowDownCircle, href: "/admin/deposits" },
     { label: "Withdrawal Requests", icon: ArrowUpCircle, href: "/admin/withdrawals" },
     { label: "Payment Settings", icon: CreditCard, href: "/admin/payment-settings" },

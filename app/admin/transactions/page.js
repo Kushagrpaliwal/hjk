@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Download, Eye } from "lucide-react";
 import DataTable from "../components/DataTable";
 import StatusBadge from "../components/StatusBadge";
 import SearchFilter from "../components/SearchFilter";
@@ -47,13 +46,31 @@ export default function TransactionsPage() {
             }
             if (betData.success) {
                 betData.data.forEach(b => {
-                    const type = b.status === "won" ? "Win" : "Loss";
+                    const normalizedStatus = String(b.status || "").toLowerCase();
+                    const isSports = b.source === "sports";
+                    const type =
+                        normalizedStatus === "won"
+                            ? isSports
+                                ? "Sports Win"
+                                : "Win"
+                            : normalizedStatus === "lost"
+                                ? isSports
+                                    ? "Sports Loss"
+                                    : "Loss"
+                                : isSports
+                                    ? "Sports Bet"
+                                    : "Bet";
+
                     txns.push({
-                        id: `BET-${b.id}`,
-                        player: b.username || "—",
-                        type: type,
+                        id: `${isSports ? "SPT" : "BET"}-${b.id}`,
+                        player: b.username || "-",
+                        type,
+                        category: isSports ? "sports" : "casino",
+                        details: b.details || "-",
                         amount: Number(b.bet_amount || 0).toLocaleString(),
-                        status: "Completed",
+                        status: normalizedStatus
+                            ? normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1)
+                            : "Pending",
                         date: new Date(b.created_by).toLocaleDateString(),
                         timestamp: new Date(b.created_by).getTime()
                     });
@@ -69,8 +86,15 @@ export default function TransactionsPage() {
     }, []);
 
     const filtered = transactions.filter((t) => {
-        const matchSearch = t.player.toLowerCase().includes(search.toLowerCase()) || t.id.toLowerCase().includes(search.toLowerCase());
-        const matchType = typeFilter === "all" || t.type.toLowerCase() === typeFilter;
+        const searchValue = search.toLowerCase();
+        const matchSearch =
+            t.player.toLowerCase().includes(searchValue) ||
+            t.id.toLowerCase().includes(searchValue) ||
+            String(t.details || "").toLowerCase().includes(searchValue);
+        const matchType =
+            typeFilter === "all" ||
+            t.category === typeFilter ||
+            t.type.toLowerCase() === typeFilter;
         const matchStatus = statusFilter === "all" || t.status.toLowerCase() === statusFilter;
         return matchSearch && matchType && matchStatus;
     });
@@ -82,22 +106,40 @@ export default function TransactionsPage() {
             key: "type",
             label: "Type",
             render: (v) => {
-                const colors = { Deposit: "#22C55E", Withdrawal: "#EF4444", Win: "#5B6CFF", Loss: "#F59E0B" };
+                const colors = {
+                    Deposit: "#22C55E",
+                    Withdrawal: "#EF4444",
+                    Win: "#5B6CFF",
+                    Loss: "#F59E0B",
+                    Bet: "#64748B",
+                    "Sports Bet": "#8B5CF6",
+                    "Sports Win": "#0EA5E9",
+                    "Sports Loss": "#F97316",
+                };
                 return (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, color: colors[v] || "#64748B", background: `${colors[v] || "#64748B"}14` }}>
-                        {v === "Deposit" ? "↓" : v === "Withdrawal" ? "↑" : v === "Win" ? "🏆" : "📉"} {v}
+                        {v}
                     </span>
                 );
             },
         },
         {
+            key: "details",
+            label: "Details",
+            render: (v) => <span style={{ color: "#64748B", fontSize: 13 }}>{v || "-"}</span>,
+        },
+        {
             key: "amount",
             label: "Amount",
-            render: (v, row) => (
-                <span style={{ fontWeight: 700, color: row.type === "Deposit" || row.type === "Win" ? "#22C55E" : "#EF4444" }}>
-                    {row.type === "Deposit" || row.type === "Win" ? "+" : "-"}{v}
-                </span>
-            ),
+            render: (v, row) => {
+                const isPositive = row.type === "Deposit" || row.type === "Win" || row.type === "Sports Win";
+
+                return (
+                    <span style={{ fontWeight: 700, color: isPositive ? "#22C55E" : "#EF4444" }}>
+                        {isPositive ? "+" : "-"}{v}
+                    </span>
+                );
+            },
         },
         { key: "status", label: "Status", render: (v) => <StatusBadge status={v} /> },
         { key: "date", label: "Date", render: (v) => <span style={{ color: "#94A3B8", fontSize: 13 }}>{v}</span> },
@@ -133,11 +175,11 @@ export default function TransactionsPage() {
             </div>
 
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-                <SearchFilter searchValue={search} onSearchChange={setSearch} searchPlaceholder="Search by player or ID..." />
+                <SearchFilter searchValue={search} onSearchChange={setSearch} searchPlaceholder="Search by player, ID, or bet details..." />
                 <div style={{ display: "flex", gap: 8 }}>
                     {[
-                        { opts: [{ value: "all", label: "All Types" }, { value: "deposit", label: "Deposit" }, { value: "withdrawal", label: "Withdrawal" }, { value: "win", label: "Win" }, { value: "loss", label: "Loss" }], value: typeFilter, onChange: setTypeFilter },
-                        { opts: [{ value: "all", label: "All Status" }, { value: "approved", label: "Approved" }, { value: "pending", label: "Pending" }, { value: "rejected", label: "Rejected" }], value: statusFilter, onChange: setStatusFilter },
+                        { opts: [{ value: "all", label: "All Types" }, { value: "deposit", label: "Deposit" }, { value: "withdrawal", label: "Withdrawal" }, { value: "casino", label: "Casino Bets" }, { value: "sports", label: "Sports Bets" }], value: typeFilter, onChange: setTypeFilter },
+                        { opts: [{ value: "all", label: "All Status" }, { value: "approved", label: "Approved" }, { value: "pending", label: "Pending" }, { value: "won", label: "Won" }, { value: "lost", label: "Lost" }, { value: "rejected", label: "Rejected" }], value: statusFilter, onChange: setStatusFilter },
                     ].map((f, i) => (
                         <select
                             key={i}

@@ -4,6 +4,10 @@ import jwt from "jsonwebtoken";
 import { writeFile } from "fs/promises";
 import path from "path";
 import fs from "fs";
+import {
+    ensureTransactionLogTable,
+    insertTransactionLog,
+} from "../../../lib/transactionLog";
 
 export async function GET() {
     try {
@@ -86,6 +90,7 @@ export async function POST(request) {
 
 export async function PATCH(request) {
     try {
+        await ensureTransactionLogTable(pool);
         const { id, status } = await request.json();
 
         if (!id || !status) {
@@ -97,17 +102,52 @@ export async function PATCH(request) {
             return NextResponse.json({ success: false, error: "Invalid status" }, { status: 400 });
         }
 
-        await pool.query(
-            "UPDATE recharges SET status = ? WHERE id = ?",
-            [status.toLowerCase(), id]
-        );
-
-        // If approved, you can also add logic here later to increase user wallet
-        if (status.toLowerCase() === 'approved') {
-            await pool.query(
-                "UPDATE users u JOIN recharges r ON u.id = r.user_id SET u.wallet = u.wallet + r.amount WHERE r.id = ?",
+        const connection = await pool.getConnection();
+        try {
+            await connection.beginTransaction();
+            const [[rechargeRow]] = await connection.query(
+                "SELECT id, user_id, amount, status FROM recharges WHERE id = ? FOR UPDATE",
                 [id]
             );
+
+            if (!rechargeRow) {
+                await connection.rollback();
+                return NextResponse.json({ success: false, error: "Recharge not found" }, { status: 404 });
+            }
+
+            await connection.query("UPDATE recharges SET status = ? WHERE id = ?", [status.toLowerCase(), id]);
+
+            if (status.toLowerCase() === "approved" && rechargeRow.status !== "approved") {
+                const [[userRow]] = await connection.query(
+                    "SELECT username, wallet FROM users WHERE id = ? FOR UPDATE",
+                    [rechargeRow.user_id]
+                );
+
+                if (!userRow) {
+                    throw new Error("User not found for recharge");
+                }
+
+                const previousBalance = Number(userRow.wallet || 0);
+                const profitLoss = Number(rechargeRow.amount || 0);
+                const currentBalance = previousBalance + profitLoss;
+
+                await connection.query("UPDATE users SET wallet = ? WHERE id = ?", [currentBalance, rechargeRow.user_id]);
+                await insertTransactionLog(connection, {
+                    username: userRow.username,
+                    previousBalance,
+                    profitLoss,
+                    currentBalance,
+                    transactionType: "DEPOSIT_APPROVED",
+                    referenceSource: "deposit",
+                });
+            }
+
+            await connection.commit();
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
         }
 
         return NextResponse.json({ success: true, message: `Deposit ${status}` });

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import pool from "../../../../lib/db";
+import {
+  ensureTransactionLogTable,
+  insertTransactionLog,
+} from "../../../../lib/transactionLog";
 
 const MIN_WITHDRAWAL = 100;
 
@@ -112,11 +116,12 @@ export async function POST(req) {
 
   let connection;
   try {
+    await ensureTransactionLogTable(pool);
     connection = await pool.getConnection();
     await connection.beginTransaction();
 
     const [[userRow]] = await connection.query(
-      "SELECT id, name, wallet FROM users WHERE id = ? FOR UPDATE",
+      "SELECT id, name, username, wallet FROM users WHERE id = ? FOR UPDATE",
       [userId]
     );
 
@@ -131,10 +136,11 @@ export async function POST(req) {
       return NextResponse.json({ error: "Insufficient balance" }, { status: 400 });
     }
 
-    await connection.query("UPDATE users SET wallet = wallet - ? WHERE id = ?", [
-      amount,
-      userId,
-    ]);
+    const previousBalance = currentWallet;
+    const profitLoss = -amount;
+    const currentBalance = currentWallet - amount;
+
+    await connection.query("UPDATE users SET wallet = ? WHERE id = ?", [currentBalance, userId]);
 
     const finalBankHolder =
       paymentMethod === "bank" ? bankHolder : userRow.name || "UPI User";
@@ -155,6 +161,15 @@ export async function POST(req) {
         amount,
       ]
     );
+
+    await insertTransactionLog(connection, {
+      username: userRow.username || userRow.name || `user_${userId}`,
+      previousBalance,
+      profitLoss,
+      currentBalance,
+      transactionType: "WITHDRAWAL_REQUESTED",
+      referenceSource: "withdrawal",
+    });
 
     await connection.commit();
 

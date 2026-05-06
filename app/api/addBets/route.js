@@ -1,4 +1,8 @@
 import pool from "../../../lib/db";
+import {
+  ensureTransactionLogTable,
+  insertSportsTransactionLog,
+} from "../../../lib/transactionLog";
 
 export async function POST(req) {
   const { searchParams } = new URL(req.url);
@@ -22,6 +26,8 @@ export async function POST(req) {
   }
 
   try {
+    await ensureTransactionLogTable(pool);
+
     const {
       event_id,
       event_name,
@@ -78,7 +84,7 @@ export async function POST(req) {
 
     if (normalizedBetType === "lay") {
       if (normalizedMatchType === "matchodds") {
-        walletDeductionAmount = ((parsedOdds - 1) * stakeAmount) / 100;
+        walletDeductionAmount = ((parsedOdds - 1) * stakeAmount);
       } else if (normalizedMatchType === "bookmaker") {
         walletDeductionAmount = (stakeAmount * parsedOdds) / 100;
       }
@@ -180,6 +186,28 @@ export async function POST(req) {
           runnerId || null,
         ]
       );
+
+      const previousBalance = wallet;
+      const currentBalance = wallet - walletDeductionAmount;
+
+      await insertSportsTransactionLog(connection, {
+        betId: result.insertId,
+        username,
+        eventId: eventIdValue,
+        eventName: event_name || null,
+        marketId: marketIdValue,
+        marketName: normalizedMarketName,
+        gameType: match_type,
+        betType,
+        runnerName,
+        odds: parsedOdds,
+        stake: stakeAmount,
+        previousBalance,
+        profitLoss: -walletDeductionAmount,
+        currentBalance,
+        transactionType: "BET_PLACED",
+        betStatus: "Pending",
+      });
 
       await connection.commit();
 
