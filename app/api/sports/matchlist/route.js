@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const EXTERNAL_API_URL = "http://46.202.166.160:3009/esid?sid=4&key=wwewdaUjbggsf56uibbhyunkhy7nhdrghjhhua";
+// const EXTERNAL_API_URL = "http://46.202.166.160:3009/esid?sid=4&key=wwewdaUjbggsf56uibbhyunkhy7nhdrghjhhua";
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes in milliseconds
 
 // In-memory cache
